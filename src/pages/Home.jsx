@@ -5,16 +5,18 @@ import { supabase } from '../lib/supabaseClient'
 export default function Home() {
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState('')
 
   useEffect(() => {
     async function fetchNotes() {
       const { data, error } = await supabase
         .from('sermon_notes')
-        .select('id, title, content, created_at, profiles(full_name)')
+        .select('id, title, content, created_at, user_id')
         .eq('published', true)
         .order('created_at', { ascending: false })
 
       if (!error) setNotes(data ?? [])
+      else setFetchError(error.message)
       setLoading(false)
     }
     fetchNotes()
@@ -47,6 +49,8 @@ export default function Home() {
       <main className="max-w-5xl mx-auto px-4 py-12">
         {loading ? (
           <p className="text-center text-gray-500">Loading sermon notes...</p>
+        ) : fetchError ? (
+          <p className="text-center text-red-500">Error: {fetchError}</p>
         ) : notes.length === 0 ? (
           <p className="text-center text-gray-400">No sermon notes published yet.</p>
         ) : (
@@ -55,7 +59,7 @@ export default function Home() {
               <div key={note.id} className="bg-white rounded-xl shadow p-6 flex flex-col gap-2">
                 <h3 className="text-lg font-semibold text-gray-800">{note.title}</h3>
                 <p className="text-sm text-gray-500">
-                  By {note.profiles?.full_name ?? 'Unknown Pastor'}
+                  By Pastor
                 </p>
                 <p className="text-gray-600 text-sm line-clamp-3">{note.content}</p>
                 <p className="text-xs text-gray-400 mt-auto">
