@@ -6,17 +6,38 @@ export default function Home() {
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState('')
+  const [selectedNote, setSelectedNote] = useState(null)
 
   useEffect(() => {
     async function fetchNotes() {
-      const { data, error } = await supabase
+      const { data: notesData, error } = await supabase
         .from('sermon_notes')
         .select('id, title, content, created_at, user_id')
         .eq('published', true)
         .order('created_at', { ascending: false })
 
-      if (!error) setNotes(data ?? [])
-      else setFetchError(error.message)
+      if (error) {
+        setFetchError(error.message)
+        setLoading(false)
+        return
+      }
+
+      const notes = notesData ?? []
+
+      // Fetch pastor names for all unique user_ids
+      const userIds = [...new Set(notes.map((n) => n.user_id))]
+      let profileMap = {}
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', userIds)
+        if (profiles) {
+          profiles.forEach((p) => { profileMap[p.id] = p.full_name })
+        }
+      }
+
+      setNotes(notes.map((n) => ({ ...n, pastorName: profileMap[n.user_id] ?? 'Unknown Pastor' })))
       setLoading(false)
     }
     fetchNotes()
@@ -54,20 +75,54 @@ export default function Home() {
         ) : notes.length === 0 ? (
           <p className="text-center text-gray-400">No sermon notes published yet.</p>
         ) : (
+          <>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {notes.map((note) => (
-              <div key={note.id} className="bg-white rounded-xl shadow p-6 flex flex-col gap-2">
+              <button
+                key={note.id}
+                onClick={() => setSelectedNote(note)}
+                className="bg-white rounded-xl shadow p-6 flex flex-col gap-2 text-left hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer w-full"
+              >
                 <h3 className="text-lg font-semibold text-gray-800">{note.title}</h3>
-                <p className="text-sm text-gray-500">
-                  By Pastor
-                </p>
+                <p className="text-sm text-gray-500">By {note.pastorName}</p>
                 <p className="text-gray-600 text-sm line-clamp-3">{note.content}</p>
                 <p className="text-xs text-gray-400 mt-auto">
                   {new Date(note.created_at).toLocaleDateString()}
                 </p>
-              </div>
+                <span className="text-xs text-indigo-500 font-medium">Read more →</span>
+              </button>
             ))}
           </div>
+
+          {/* Sermon Modal */}
+          {selectedNote && (
+            <div
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4"
+              onClick={() => setSelectedNote(null)}
+            >
+              <div
+                className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-8"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-start gap-4 mb-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800">{selectedNote.title}</h2>
+                    <p className="text-sm text-gray-500 mt-1">
+                      By {selectedNote.pastorName} &bull; {new Date(selectedNote.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedNote(null)}
+                    className="text-gray-400 hover:text-gray-600 text-2xl leading-none shrink-0"
+                  >
+                    &times;
+                  </button>
+                </div>
+                <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{selectedNote.content}</p>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </main>
     </div>
