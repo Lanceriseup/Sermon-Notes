@@ -4,6 +4,7 @@
 create table if not exists profiles (
   id uuid references auth.users on delete cascade primary key,
   full_name text,
+  role text not null default 'pastor' check (role in ('admin', 'pastor')),
   created_at timestamptz default now()
 );
 
@@ -54,7 +55,26 @@ create policy "Pastors can delete own notes"
   on sermon_notes for delete
   using (auth.uid() = user_id);
 
+create policy "Pastors can update own notes"
+  on sermon_notes for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 -- Anyone can read profiles (for display on home page)
 create policy "Public can view profiles"
   on profiles for select
   using (true);
+
+-- Admins can view all sermon notes
+create policy "Admins can view all notes"
+  on sermon_notes for select
+  using (
+    exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+  );
+
+-- Admins can delete any sermon note
+create policy "Admins can delete any note"
+  on sermon_notes for delete
+  using (
+    exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+  );
